@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width">
+ <title>Chat MQTT Multi-dispositivo</title>
+ <script src="paho.javascript-1.0.3/paho-mqtt-min.js"></script>
+ <style>
+  pre {
+   max-height: 300px;
+   overflow-y: auto;
+   border: 1px solid #ddd;
+   padding: 10px;
+   background-color: #fafafa;
+  }
+  form {
+   max-width: 600px;
+   margin: 0 auto;
+   padding: 20px;
+   border: 1px solid #ccc;
+   border-radius: 5px;
+   background-color: #fff;
+  }
+  input {
+   width: 100%;
+   padding: 8px;
+   margin: 5px 0;
+   box-sizing: border-box;
+  }
+  button {
+   background-color: #4CAF50;
+   color: white;
+   padding: 10px 15px;
+   border: none;
+   border-radius: 4px;
+   cursor: pointer;
+  }
+  button:hover {
+   background-color: #45a049;
+  }
+ </style>
+</head>
+
+<body>
+ <form onsubmit="formActivada(event)">
+  <h1>Chat MQTT Multi-dispositivo</h1>
+  <p>
+   <label>
+    Alias *
+    <input id="inputAlias" required placeholder="Tu nombre o identificador">
+   </label>
+  </p>
+  <p>
+   <label>
+    Mensaje *
+    <input id="inputMensaje" required placeholder="Escribe tu mensaje aquí">
+   </label>
+  </p>
+  <p>* Obligatorio</p>
+  <p><button type="submit">Enviar</button></p>
+  <pre id="pre"></pre>
+ </form>
+
+ <script>
+  // Configuración MQTT
+  const TOPICO_CHAT = "gilpgawoas/chat/multidispositivo";
+  const clientId = "gilpgawoasChat-" + Math.random().toString(16).substr(2, 8);
+  const cliente = new Paho.MQTT.Client("test.mosquitto.org", 8081, clientId);
+
+  /**
+   * @param {Event} event
+   */
+  function formActivada(event) {
+   try {
+    event.preventDefault();
+    const timestamp = new Date().toLocaleTimeString();
+    const mensaje = `[${timestamp}] ${inputAlias.value.trim()}: ${inputMensaje.value.trim()}`;
+    enviaMensajeMqtt(mensaje, TOPICO_CHAT);
+    inputMensaje.value = ""; // Limpiar el campo después de enviar
+   } catch (error) {
+    console.error(error);
+   }
+  }
+
+  // Acciones al recibir un mensaje.
+  cliente.onMessageArrived = mensaje => {
+   if (mensaje.destinationName === TOPICO_CHAT) {
+    pre.textContent += mensaje.payloadString + "\n";
+    // Auto-scroll al final
+    pre.scrollTop = pre.scrollHeight;
+   }
+  };
+
+  // Acciones al perder la conexión.
+  cliente.onConnectionLost = responseObject => {
+   if (responseObject.errorCode !== 0) {
+    console.log("Conexión perdida: " + responseObject.errorMessage);
+   }
+  };
+
+  // Configura el cliente.
+  cliente.connect({
+   keepAliveInterval: 10,
+   useSSL: true,
+   onFailure: (error) => {
+    console.log("Fallo en la conexión: " + error.errorMessage);
+   },
+   onSuccess: () => {
+    console.log("Conectado al broker MQTT");
+    cliente.subscribe(TOPICO_CHAT);
+    pre.textContent += "Conectado al chat. Puedes empezar a enviar mensajes.\n\n";
+   }
+  });
+
+  /**
+   * Envía un mensaje al servidor MQTT
+   * @param {string} mensaje
+   * @param {string} topico
+   */
+  function enviaMensajeMqtt(mensaje, topico) {
+   const mensajeMqtt = new Paho.MQTT.Message(mensaje);
+   mensajeMqtt.destinationName = topico;
+   cliente.send(mensajeMqtt);
+  }
+ </script>
+</body>
+</html>
